@@ -1,0 +1,19 @@
+name: PR Merged Message
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main  # 或您要監聽的預設分支
+
+jobs:
+  pr_merged_message:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check if PR was merged
+        if: github.event.pull_request.merged == true
+        run: |
+          echo "🎉 恭喜！這個 Pull Request 已經成功合併到 ${GITHUB_BASE_REF} 分支了！"
+          echo "PR 標題: ${{ github.event.pull_request.title }}"
+          echo "PR 作者: ${{ github.event.pull_request.user.login }}"
