@@ -1,0 +1,106 @@
+# .github/workflows/pr-lifecycle.yml
+name: PR Lifecycle CI/CD
+
+on:
+  pull_request:
+    types: [opened, synchronize, closed]
+    # 監聽 PR 的開啟、更新、關閉狀態
+    branches:
+      - main # 或您的主要分支
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Job 1: CI - 建置與測試 (.NET Framework 4.8 版本)
+  build-and-test:
+    # 只在 PR 開啟或更新時執行
+    #if: github.event.action == 'opened' || github.event.action == 'synchronize'
+    if: github.event.action == 'closed' && github.event.pull_request.merged == true
+    # 1. 更換為 Windows 運行環境
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # 2. 設定 MSBuild (用於建置 .NET Framework 專案)
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    # 3. 設定 NuGet (用於還原套件)
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+     
+    # 4. 使用 NuGet 還原專案套件     
+    - name: Restore Dependencies
+      run: nuget restore CopilotAgentCodeReviewTest/CopilotAgentCodeReviewTest.sln
+
+    # 5. 使用 MSBuild 建置解決方案
+    - name: Build Solution
+      run: msbuild CopilotAgentCodeReviewTest/CopilotAgentCodeReviewTest.sln /p:Configuration=Release
+
+    # --- 待辦事項：單元測試 ---
+    # 以下步驟已暫時註解。
+    # 原因：目前的專案結構中沒有單元測試專案。
+    # 如何啟用：
+    # 1. 在您的解決方案中新增一個測試專案 (例如 CopilotAgentCodeReviewTest.Tests)。
+    # 2. 將新的測試專案推送到儲存庫。
+    # 3. 取消以下步驟的註解。
+    # - name: Run Unit Tests
+    #   uses: microsoft/vstest-action@v1
+    #   with:
+    #     testFiles: '${{ github.workspace }}\**\bin\Release\*Tests.dll'
+    #     platform: 'x64'
+    #     configuration: 'Release'
+    
+  # Job 2: CD - 模擬部署到預備環境 (Staging)
+  deploy-to-staging:
+    #if: github.event.action == 'opened' || github.event.action == 'synchronize'
+    if: github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    # 設定依賴關係：必須等待 build-and-test 和 ai-code-review 成功後才能執行
+    needs: [build-and-test]
+    steps:
+      - name: Simulate Deployment to Staging
+        run: |
+          echo "✅ Build and test passed!"
+          echo "🚀 Simulating deployment of PR #${{ github.event.pull_request.number }} to Staging environment..."
+          sleep 5 # 模擬部署過程
+          echo "🎉 Staging deployment successful!"
+      
+      - name: Post Staging URL to PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.issue.number;
+            const stagingUrl = `http://staging.example.com/pr-${prNumber}`; // 模擬的 Staging URL
+            const body = `✅ **Deployment to Staging successful!**\n\nYou can preview the changes here: [${stagingUrl}](${stagingUrl})`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: body
+            });
+
+  # Job 3: PR 合併後的動作 (部署到生產環境)
+  post-merge-actions:
+    if: github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    needs: [deploy-to-staging]
+    # 注意：這個 Job 應該依賴 CI/CD 的成功，但在實務上通常透過分支保護規則來確保
+    steps:
+      - name: Display Merge Confirmation Message
+        run: |
+          echo "🎉 恭喜！這個 Pull Request 已經成功合併到 ${{ github.event.pull_request.base.ref }} 分支了！"
+          echo "PR 標題: ${{ github.event.pull_request.title }}"
+          echo "PR 作者: ${{ github.event.pull_request.user.login }}"
+          
+      - name: Simulate Deployment to Production
+        run: |
+          echo "🚀 Simulating deployment to Production environment..."
+          sleep 5
+          echo "🎉 Production deployment successful!"
