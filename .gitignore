@@ -1,0 +1,18 @@
+# Build artifacts
+bin/
+obj/
+*.exe
+*.pdb
+*.dll
+*.user
+*.suo
+*.cache
+*.log
+
+# Visual Studio artifacts
+.vs/
+packages/
+
+# OS artifacts  
+.DS_Store
+Thumbs.db
